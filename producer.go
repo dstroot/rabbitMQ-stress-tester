@@ -2,24 +2,47 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/streadway/amqp"
 	"log"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
-type ProducerConfig struct {
-	Uri        string
+type producerConfig struct {
+	URI        string
 	Bytes      int
 	Quiet      bool
 	WaitForAck bool
 }
 
-func Produce(config ProducerConfig, tasks chan int) {
-	connection, err := amqp.Dial(config.Uri)
+// Example complete producer configuration
+var configExample struct {
+	uri          string // uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
+	exchangeName string // exchange", "test-exchange", "Durable AMQP exchange name")
+	exchangeType string // exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
+	routingKey   string // key", "test-key", "AMQP routing key")
+	body         string // body", "foobar", "Body of message")
+	reliable     bool   // reliable", true, "Wait for the publisher confirmation before exiting")
+}
+
+func producer(config producerConfig, tasks chan int) {
+
+	// First, lets get a connection to our server
+	connection, err := amqp.Dial(config.URI)
 	if err != nil {
-		println(err.Error())
-		panic(err.Error())
+		// Panicln is equivalent to Printf() followed by a call to panic().
+		log.Panicln(err.Error())
+		// println(err.Error())
+		// panic(err.Error())
 	}
+
+	// log.Printf("dialing %q", config.URI)
+	// connection, err := amqp.Dial(config.URI)
+	// if err != nil {
+	// 	return fmt.Errorf("Dial: %s", err.Error())
+	// 	// return log.Fatalf("Dial: %s", err)
+	// }
+	// defer connection.Close()
 
 	channel, err1 := connection.Channel()
 	if err1 != nil {
@@ -33,7 +56,7 @@ func Produce(config ProducerConfig, tasks chan int) {
 
 	ack, nack := channel.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
-	q := MakeQueue(channel)
+	q := makeQueue(channel)
 
 	for {
 
@@ -49,15 +72,15 @@ func Produce(config ProducerConfig, tasks chan int) {
 		start := time.Now()
 
 		message := &MqMessage{start, sequenceNumber, makeString(config.Bytes)}
-		messageJson, _ := json.Marshal(message)
+		messageJSON, _ := json.Marshal(message)
 
 		channel.Publish("", q.Name, true, false, amqp.Publishing{
 			Headers:         amqp.Table{},
 			ContentType:     "text/plain",
 			ContentEncoding: "UTF-8",
-			Body:            messageJson,
-			DeliveryMode:    amqp.Transient,
-			Priority:        0,
+			Body:            messageJSON,
+			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+			Priority:        0,              // 0-9
 		},
 		)
 
@@ -75,17 +98,22 @@ func confirmOne(ack, nack chan uint64, quiet bool, waitForAck bool) {
 		select {
 		case tag := <-ack:
 			if !quiet {
-				log.Println("Acked %d", tag)
+				// Printing via package log is safe from concurrent
+				// goroutines (which plain fmt isn't). Log can also add
+				// timing information automatically.
+				log.Printf("Acked %d", tag)
 			}
 		case tag := <-nack:
-			log.Println("Nack alert! %d", tag)
+			log.Printf("Nack alert! %d", tag)
+			// default:
+			// 	log.Println("no communication\n")
 		}
 	}
 }
 
 func makeString(bytes int) string {
 	longString := `
-	ANTAŬPAROLO.
+  ANTAŬPAROLO.
 
 
 Estas afero konata, ke la malgrandaj nacioj tre ŝatas esti

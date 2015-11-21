@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/streadway/amqp"
 	"log"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
-func Consume(uri string, doneChan chan bool) {
+func consume(uri string, doneChan chan bool) {
 	log.Println("Consuming...")
+
 	connection, err := amqp.Dial(uri)
 	if err != nil {
 		println(err.Error())
@@ -23,7 +25,7 @@ func Consume(uri string, doneChan chan bool) {
 	}
 	defer channel.Close()
 
-	q := MakeQueue(channel)
+	q := makeQueue(channel)
 
 	msgs, err3 := channel.Consume(q.Name, "", true, false, false, false, nil)
 	if err3 != nil {
@@ -42,5 +44,4 @@ func Consume(uri string, doneChan chan bool) {
 	}
 
 	log.Println("done recieving")
-
 }
