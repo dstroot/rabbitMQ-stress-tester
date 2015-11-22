@@ -1,31 +1,34 @@
-package main
+package producer
 
 import (
 	"encoding/json"
 	"log"
 	"time"
 
+	"github.com/dstroot/rabbit-mq-stress-tester/queue"
 	"github.com/streadway/amqp"
 )
 
-type producerConfig struct {
+// MyConfig ...
+type MyConfig struct {
 	URI        string
 	Bytes      int
 	Quiet      bool
 	WaitForAck bool
 }
 
-// Example complete producer configuration
-var configExample struct {
-	uri          string // uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-	exchangeName string // exchange", "test-exchange", "Durable AMQP exchange name")
-	exchangeType string // exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
-	routingKey   string // key", "test-key", "AMQP routing key")
-	body         string // body", "foobar", "Body of message")
-	reliable     bool   // reliable", true, "Wait for the publisher confirmation before exiting")
-}
+// // Example complete producer configuration
+// var configExample struct {
+// 	uri          string // uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
+// 	exchangeName string // exchange", "test-exchange", "Durable AMQP exchange name")
+// 	exchangeType string // exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
+// 	routingKey   string // key", "test-key", "AMQP routing key")
+// 	body         string // body", "foobar", "Body of message")
+// 	reliable     bool   // reliable", true, "Wait for the publisher confirmation before exiting")
+// }
 
-func producer(config producerConfig, tasks chan int) {
+// Produce ...
+func Produce(config MyConfig, tasks chan int) {
 
 	// First, lets get a connection to our server
 	connection, err := amqp.Dial(config.URI)
@@ -56,7 +59,7 @@ func producer(config producerConfig, tasks chan int) {
 
 	ack, nack := channel.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
-	q := makeQueue(channel)
+	q := queue.MakeQueue(channel)
 
 	for {
 
@@ -71,7 +74,7 @@ func producer(config producerConfig, tasks chan int) {
 
 		start := time.Now()
 
-		message := &MqMessage{start, sequenceNumber, makeString(config.Bytes)}
+		message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: makeString(config.Bytes)}
 		messageJSON, _ := json.Marshal(message)
 
 		channel.Publish("", q.Name, true, false, amqp.Publishing{

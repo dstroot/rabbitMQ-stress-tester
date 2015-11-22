@@ -1,14 +1,16 @@
-package main
+package consumer
 
 import (
 	"encoding/json"
 	"log"
 	"time"
 
+	"github.com/dstroot/rabbit-mq-stress-tester/queue"
 	"github.com/streadway/amqp"
 )
 
-func consume(uri string, doneChan chan bool) {
+// Consume ...
+func Consume(uri string, doneChan chan bool) {
 	log.Println("Consuming...")
 
 	connection, err := amqp.Dial(uri)
@@ -25,7 +27,7 @@ func consume(uri string, doneChan chan bool) {
 	}
 	defer channel.Close()
 
-	q := makeQueue(channel)
+	q := queue.MakeQueue(channel)
 
 	msgs, err3 := channel.Consume(q.Name, "", true, false, false, false, nil)
 	if err3 != nil {
@@ -34,7 +36,7 @@ func consume(uri string, doneChan chan bool) {
 
 	for d := range msgs {
 		doneChan <- true
-		var thisMessage MqMessage
+		var thisMessage queue.MqMessage
 		err4 := json.Unmarshal(d.Body, &thisMessage)
 		if err4 != nil {
 			log.Printf("Error unmarshalling! %s", err.Error())
