@@ -1,3 +1,4 @@
+// Package consumer reads (consumes) messages from the declared queue.
 package consumer
 
 import (
@@ -9,40 +10,40 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// Consume ...
+// Consume cosumes messages
 func Consume(uri string, doneChan chan bool) {
-	log.Println("Consuming...")
 
+	// create connection
 	connection, err := amqp.Dial(uri)
 	if err != nil {
-		println(err.Error())
-		panic(err.Error())
+		log.Fatalf("Error: %s", err)
 	}
 	defer connection.Close()
 
+	// create channel
 	channel, err1 := connection.Channel()
 	if err1 != nil {
-		println(err1.Error())
-		panic(err1.Error())
+		log.Fatalf("Error: %s", err1)
 	}
 	defer channel.Close()
 
+	// open queue
 	q := queue.MakeQueue(channel)
 
-	msgs, err3 := channel.Consume(q.Name, "", true, false, false, false, nil)
-	if err3 != nil {
-		panic(err3)
+	// consume messages
+	msgs, err2 := channel.Consume(q.Name, "", true, false, false, false, nil)
+	if err2 != nil {
+		log.Fatalf("Error: %s", err2)
 	}
 
 	for d := range msgs {
 		doneChan <- true
 		var thisMessage queue.MqMessage
-		err4 := json.Unmarshal(d.Body, &thisMessage)
-		if err4 != nil {
-			log.Printf("Error unmarshalling! %s", err.Error())
+		err3 := json.Unmarshal(d.Body, &thisMessage)
+		if err3 != nil {
+			log.Printf("Error unmarshalling! %s", err3)
 		}
 		log.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
-
 	}
 
 	log.Println("done recieving")

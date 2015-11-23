@@ -1,17 +1,14 @@
-/*
+// Copyright 2015 Dan Stroot. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
-Introduction
-------------
-
-RabbitMQ is an AMQP-compliant queue broker. It exists to facilitate
-the passing of messages between or within systems. This program is
-designed for load testing with RabbitMQ.
-
-*/
-
+// RabbitMQ is an AMQP-compliant queue broker. It exists to facilitate
+// the passing of messages between or within systems. This program is
+// designed for load testing with RabbitMQ.
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -27,11 +24,11 @@ var totalCount int64
 func main() {
 	// runtime.GOMAXPROCS(runtime.NumCPU())
 	app := cli.NewApp()
-	app.Name = "coyote"
+	app.Name = "Coyote"
 	app.HelpName = "coyote"
-	app.Usage = "Coyote makes the rabbit run! RabbitMQ Stress Tester."
+	app.Usage = "Coyote makes the rabbit run! (RabbitMQ Stress Tester)"
 	app.Version = "0.0.1"
-	app.Author = "Dan Stroot"
+	app.Authors = []cli.Author{cli.Author{Name: "Dan Stroot", Email: "dan.stroot@gmail.com"}}
 	app.Copyright = "None"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -101,18 +98,25 @@ func main() {
  * @return nil
  */
 func runApp(c *cli.Context) {
-	println("Running!")
 
 	uri := "amqp://guest:guest@" + c.String("server")
 
-	if c.Int("consume") > -1 {
+	if c.Int("consume") > -1 && c.Int("produce") != 0 {
+		fmt.Println("Error: Cannot specify both producer and consumer options together")
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+	} else if c.Int("consume") > -1 {
+		fmt.Println("Running in consumer mode!")
 		makeConsumers(uri, c.Int("concurrency"), c.Int("consume"))
-	}
-
-	if c.Int("produce") != 0 {
+	} else if c.Int("produce") != 0 {
+		fmt.Println("Running in producer mode!")
 		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), WaitForAck: c.Bool("wait-for-ack")}
 		makeProducers(c.Int("produce"), c.Int("wait"), c.Int("concurrency"), config)
+	} else {
+		cli.ShowAppHelp(c)
+		os.Exit(0)
 	}
+
 }
 
 /**
@@ -125,7 +129,6 @@ func runApp(c *cli.Context) {
  * @return              [description]
  */
 func makeProducers(n int, wait int, concurrency int, config producer.MyConfig) {
-
 	println("Make Producers")
 	println("producers: ", n)
 	println("wait: ", wait)

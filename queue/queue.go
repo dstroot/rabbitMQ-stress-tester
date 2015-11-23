@@ -1,12 +1,16 @@
 package queue
 
 import (
+	"log"
 	"time"
 
 	"github.com/streadway/amqp"
 )
 
-// MqMessage ...
+const queueName string = "stress-test-exchange"
+
+// MqMessage is a struct that contains messages.  Messages are defined
+// by a time stamp, a sequence number and the message payload.
 type MqMessage struct {
 	TimeNow        time.Time
 	SequenceNumber int
@@ -67,9 +71,10 @@ func MakeQueue(c *amqp.Channel) amqp.Queue {
 	 * @param noWait       bool   [no wait flag]
 	 * @param args         Table  [additional arguments]
 	 */
-	q, err2 := c.QueueDeclare("stress-test-exchange", true, false, false, false, nil)
-	if err2 != nil {
-		panic(err2)
+	q, err := c.QueueDeclare(queueName, true, false, false, false, nil)
+	if err != nil {
+		// Fatalf is equivalent to Printf() followed by a call to os.Exit(1).
+		log.Fatalf("Error: %s", err)
 	}
 	return q
 }

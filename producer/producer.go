@@ -30,27 +30,19 @@ type MyConfig struct {
 // Produce ...
 func Produce(config MyConfig, tasks chan int) {
 
-	// First, lets get a connection to our server
+	// get a connection to our server
+	log.Printf("dialing %q", config.URI)
 	connection, err := amqp.Dial(config.URI)
 	if err != nil {
-		// Panicln is equivalent to Printf() followed by a call to panic().
-		log.Panicln(err.Error())
-		// println(err.Error())
-		// panic(err.Error())
+		log.Fatalf("Dial: %s", err.Error())
 	}
+	defer connection.Close()
 
-	// log.Printf("dialing %q", config.URI)
-	// connection, err := amqp.Dial(config.URI)
-	// if err != nil {
-	// 	return fmt.Errorf("Dial: %s", err.Error())
-	// 	// return log.Fatalf("Dial: %s", err)
-	// }
-	// defer connection.Close()
-
-	channel, err1 := connection.Channel()
-	if err1 != nil {
-		println(err1.Error())
-		panic(err1.Error())
+	// open a channel
+	log.Printf("got Connection, getting Channel")
+	channel, err := connection.Channel()
+	if err != nil {
+		log.Fatalf("Channel: %s", err)
 	}
 
 	if config.WaitForAck {
@@ -108,8 +100,6 @@ func confirmOne(ack, nack chan uint64, quiet bool, waitForAck bool) {
 			}
 		case tag := <-nack:
 			log.Printf("Nack alert! %d", tag)
-			// default:
-			// 	log.Println("no communication\n")
 		}
 	}
 }
