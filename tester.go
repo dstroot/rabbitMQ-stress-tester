@@ -1,10 +1,63 @@
-// Copyright 2015 Dan Stroot. All rights reserved.
-// Use of this source code is governed by a BSD-style
+// Copyright 2015 by Dan Stroot. All rights reserved.
+// Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-// RabbitMQ is an AMQP-compliant queue broker. It exists to facilitate
-// the passing of messages between or within systems. This program is
-// designed for load testing with RabbitMQ.
+/*
+Package coyote is a RabbitMQ stress test utility.  RabbitMQ is an
+AMQP-compliant queue broker. It facilitates the passing of messages
+between or within systems. This program was created for load/stress
+testing RabbitMQ.
+
+Usage:
+
+To use this program it is helpful to know some basic AMQP concepts.
+AMQP 0-9-1 (Advanced Message Queuing Protocol) is a messaging protocol
+that enables conforming client applications to communicate with
+conforming messaging middleware brokers. Messaging brokers receive
+messages from publishers (applications that publish them, also known
+as producers) and route them to consumers (applications that process
+them).  Since it is a network protocol, the publishers, consumers and
+the broker can all reside on different machines.
+
+Compiling:
+	$ go build tester.go
+
+Running:
+	$ ./tester -h
+
+Examples
+	Open two terminal windows. In one, run
+
+		./tester -s test-rmq-server -c 100000
+
+	That will launch in Consumer mode. It defaults to 50 Goroutines,
+	and will (-c)consume 100,000 messages before quitting.
+
+	In the other terminal window, run
+
+		./tester -s test-rmq-server -p 100000 -b 10000 -n 100 -q
+
+	This will run the tester in Producer mode. It will (-p)roduce 100,000
+	messages of 10,000 (-b)ytes each. It will launch a pool of 100
+	Goroutines (-n), and it will work in (-q)uiet mode, only printing
+	NACKs and final statistics to stdout.
+
+		./tester -s test-rmq-server -p 100000 -b 10000 -n 100 -q -a
+
+	With the -a flag each Goroutine waits for an ACK or NACK from
+	the RabbitMQ server before publishing the next message. I have
+	never seen a missing message in this mode.
+
+	Consume messages forever:
+
+		./tester -s rabbit-mq-test.cs1cloud.internal -c 0
+
+	Produce 100,000 messages of 10KB each, using 50 concurrent
+	goroutines, waiting 100 nanoseconds between each message.
+	Only print to stdout if there is a nack or when you finish.
+
+		./tester -s rabbit-mq-test.cs1cloud.internal -p 100000 -b 10000 -w 100 -n 50 -q
+*/
 package main
 
 import (
@@ -84,19 +137,17 @@ func main() {
 	app.Run(os.Args)
 }
 
-// function with parameters (types go after params), and named return values
+// runApp function with parameters (types go after params), and named return values
 // func functionName(param1 string, param2 int) (n int, s string) {}
-
-/**
- * Since main is taken up by command line handling, this is really the "main"
- * procedure of the application - it fires up the producers and consumers.
- *
- * Parameter/name/type/description
- * Return/name/type/description
- *
- * @param  c    *cli.Context  [pointer to cli.Context]
- * @return nil
- */
+//
+// Since main is taken up by command line handling, this is really the "main"
+// procedure of the application - it fires up the producers and consumers.
+//
+// Parameter/name/type/description
+// Return/name/type/description
+//
+// @param  c    *cli.Context  [pointer to cli.Context]
+// @return nil
 func runApp(c *cli.Context) {
 
 	uri := "amqp://guest:guest@" + c.String("server")
