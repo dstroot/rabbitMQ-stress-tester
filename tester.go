@@ -61,12 +61,11 @@ Examples
 package main
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/backstop/rabbit-mq-stress-tester/consumer"
+	"github.com/backstop/rabbit-mq-stress-tester/logging"
 	"github.com/backstop/rabbit-mq-stress-tester/producer"
 	"github.com/codegangsta/cli"
 )
@@ -74,6 +73,8 @@ import (
 var totalTime int64
 var totalCount int64
 
+// main parses all the command flags and the calls the function "runApp" to
+// actually run the application
 func main() {
 	// runtime.GOMAXPROCS(runtime.NumCPU())
 	app := cli.NewApp()
@@ -91,22 +92,22 @@ func main() {
 			EnvVar: "RABBITMQ_SERVER",
 		},
 		cli.IntFlag{
-			Name:   "produce, p",
+			Name:   "consumers, c",
 			Value:  0,
-			Usage:  "number of messages to produce, -1 to produce forever",
-			EnvVar: "RABBITMQ_PRODUCE",
+			Usage:  "number of consumers to create. each is a seperate goroutine",
+			EnvVar: "RABBITMQ_CONSUMER",
 		},
 		cli.IntFlag{
-			Name:   "wait, w",
+			Name:   "producers, p",
 			Value:  0,
-			Usage:  "number of nanoseconds to wait between publish events",
-			EnvVar: "RABBITMQ_WAIT",
+			Usage:  "number of producers to create. each is a seperate goroutine",
+			EnvVar: "RABBITMQ_PRODUCER",
 		},
 		cli.IntFlag{
-			Name:   "consume, c",
-			Value:  -1,
-			Usage:  "number of messages to consume. 0 consumes forever",
-			EnvVar: "RABBITMQ_CONSUME",
+			Name:   "messages, m",
+			Value:  10,
+			Usage:  "number of messages to process. -1 is infinite",
+			EnvVar: "RABBITMQ_MESSAGES",
 		},
 		cli.IntFlag{
 			Name:   "bytes, b",
@@ -115,10 +116,10 @@ func main() {
 			EnvVar: "RABBITMQ_BYTES",
 		},
 		cli.IntFlag{
-			Name:   "concurrency, n",
-			Value:  50,
-			Usage:  "number of reader/writer Goroutines",
-			EnvVar: "RABBITMQ_CONCURRECY",
+			Name:   "wait, w",
+			Value:  0,
+			Usage:  "number of nanoseconds to wait between publish events",
+			EnvVar: "RABBITMQ_WAIT",
 		},
 		cli.BoolFlag{
 			Name:   "quiet, q",
@@ -126,9 +127,14 @@ func main() {
 			EnvVar: "RABBITMQ_QUIET",
 		},
 		cli.BoolFlag{
-			Name:   "wait-for-ack, a",
+			Name:   "reliable, r",
 			Usage:  "wait for an ack or nack after enqueueing a message",
-			EnvVar: "RABBITMQ_ACK",
+			EnvVar: "RABBITMQ_RELIABLE",
+		},
+		cli.BoolFlag{
+			Name:   "verbose, V",
+			Usage:  "show all logging output",
+			EnvVar: "RABBITMQ_VERBOSE",
 		},
 	}
 	app.Action = func(c *cli.Context) {
@@ -137,92 +143,99 @@ func main() {
 	app.Run(os.Args)
 }
 
-// runApp function with parameters (types go after params), and named return values
-// func functionName(param1 string, param2 int) (n int, s string) {}
-//
-// Since main is taken up by command line handling, this is really the "main"
-// procedure of the application - it fires up the producers and consumers.
-//
-// Parameter/name/type/description
-// Return/name/type/description
-//
-// @param  c    *cli.Context  [pointer to cli.Context]
-// @return nil
+// runApp is really the "main" function of the application - it fires up
+// the producers and consumers. (Since main is taken up by command line handling)
 func runApp(c *cli.Context) {
+
+	// setup logging
+	logging.SetLogFile("./tester.txt")
+	if c.Bool("verbose") {
+		logging.SetLogThreshold(logging.LevelTrace)
+		logging.SetStdoutThreshold(logging.LevelInfo)
+	}
 
 	uri := "amqp://guest:guest@" + c.String("server")
 
-	if c.Int("consume") > -1 && c.Int("produce") != 0 {
-		fmt.Println("Error: Cannot specify both producer and consumer options together")
+	if c.Int("consumers") > 0 && c.Int("producers") > 0 {
+		logging.ERROR.Println("Cannot specify both producer and consumer options together. Start this up as either a producer *or* consumer.")
 		cli.ShowAppHelp(c)
 		os.Exit(1)
-	} else if c.Int("consume") > -1 {
-		fmt.Println("Running in consumer mode!")
-		makeConsumers(uri, c.Int("concurrency"), c.Int("consume"))
-	} else if c.Int("produce") != 0 {
-		fmt.Println("Running in producer mode!")
-		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), WaitForAck: c.Bool("wait-for-ack")}
-		makeProducers(c.Int("produce"), c.Int("wait"), c.Int("concurrency"), config)
+
+	} else if c.Int("messages") < 1 {
+		logging.ERROR.Println("Messages must be one or more.")
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+
+	} else if c.Int("consumers") > 0 {
+		logging.WARN.Println("Consumers to create: ", c.Int("consumers"))
+		logging.WARN.Println("Messages to consume: ", c.Int("messages"))
+		makeConsumers(uri, c.Int("consumers"), c.Int("messages"))
+
+	} else if c.Int("producers") > 0 {
+		logging.WARN.Println("Producers to create: ", c.Int("producers"))
+		logging.WARN.Println("Messages to send: ", c.Int("messages"))
+		logging.WARN.Println("Bytes per message: ", c.Int("bytes"))
+		logging.WARN.Println("Wait between messages: ", c.Int("wait"))
+
+		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), WaitForAck: c.Bool("reliable")}
+		makeProducers(c.Int("messages"), c.Int("wait"), c.Int("producers"), config)
+
 	} else {
+		logging.ERROR.Println("Something was specified incorrectly.")
 		cli.ShowAppHelp(c)
 		os.Exit(0)
 	}
 
 }
 
-/**
- * Create a task channel and a variable number of goroutines (passed in via the concurrency variable)
- *
- * @param   n           int            [number of messages to produce, -1 to produce forever]
- * @param   wait        int            [number of nanoseconds to wait between publish events]
- * @param   concurrency int            [number of reader/writer Goroutines]
- * @param   config      producerConfig [struct containing configuration information]
- * @return              [description]
- */
-func makeProducers(n int, wait int, concurrency int, config producer.MyConfig) {
-	println("Make Producers")
-	println("producers: ", n)
-	println("wait: ", wait)
-	println("concurrency: ", concurrency)
+// makeProducers creates a variable number of "producer" goroutines and
+// sends a variable number of messages to the taskChan channel
+func makeProducers(messages int, wait int, producers int, config producer.MyConfig) {
 
 	taskChan := make(chan int)
 
-	for i := 0; i < concurrency; i++ {
+	// create producers
+	for i := 0; i < producers; i++ {
+		logging.INFO.Printf("Making producer %d", i+1)
 		go producer.Produce(config, taskChan)
 	}
 
 	start := time.Now()
 
-	for i := 0; i < n; i++ {
-		taskChan <- i
+	// create Messages
+	for i := 0; i < messages; i++ {
+		logging.INFO.Printf("Making message %d", i+1)
+		taskChan <- i // send i to taskChan
 		time.Sleep(time.Duration(int64(wait)))
 	}
 
-	time.Sleep(time.Duration(10000))
-
+	// wait and close (elegant???)
+	time.Sleep(time.Duration(100000))
 	close(taskChan)
 
-	log.Printf("Finished: %s", time.Since(start))
+	logging.WARN.Printf("Producing finished: %s", time.Since(start))
 }
 
-func makeConsumers(uri string, concurrency int, toConsume int) {
+func makeConsumers(uri string, consumers int, messages int) {
 
 	doneChan := make(chan bool)
 
-	for i := 0; i < concurrency; i++ {
+	// create consumers
+	for i := 0; i < consumers; i++ {
+		logging.INFO.Printf("Making consumer %d", i+1)
 		go consumer.Consume(uri, doneChan)
 	}
 
 	start := time.Now()
 
-	if toConsume > 0 {
-		for i := 0; i < toConsume; i++ {
+	// get messages
+	if messages > 0 {
+		for i := 0; i < messages; i++ {
 			<-doneChan
 			if i == 1 {
 				start = time.Now()
 			}
-			numComsumed := i + 1 // 1-100 easier than 0-99
-			log.Println("Consumed: ", numComsumed)
+			logging.INFO.Printf("Number of messages consumed %d", i+1)
 		}
 	} else {
 		for {
@@ -230,5 +243,5 @@ func makeConsumers(uri string, concurrency int, toConsume int) {
 		}
 	}
 
-	log.Printf("Done consuming! %s", time.Since(start))
+	logging.WARN.Printf("Done consuming! %s", time.Since(start))
 }
