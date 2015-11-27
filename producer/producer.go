@@ -2,19 +2,21 @@ package producer
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
+	"github.com/backstop/rabbit-mq-stress-tester/logging"
 	"github.com/dstroot/rabbit-mq-stress-tester/queue"
 	"github.com/streadway/amqp"
 )
 
 // MyConfig ...
 type MyConfig struct {
-	URI        string
-	Bytes      int
-	Quiet      bool
-	WaitForAck bool
+	URI      string
+	Bytes    int
+	Quiet    bool
+	Reliable bool
 }
 
 // // Example complete producer configuration
@@ -28,26 +30,63 @@ type MyConfig struct {
 // }
 
 // Produce ...
-func Produce(config MyConfig, tasks chan int) {
+func Produce(config MyConfig, tasks chan int, i int) {
+
+	logging.INFO.Printf("I am producer %d", i+1)
 
 	// get a connection to our server
-	log.Printf("dialing %q", config.URI)
+	logging.INFO.Printf("Producer %d dialing %q", i+1, config.URI)
 	connection, err := amqp.Dial(config.URI)
 	if err != nil {
-		log.Fatalf("Dial: %s", err.Error())
+		logging.FATAL.Printf("Dial: %s", err.Error())
+		// log.Fatalf("Dial: %s", err.Error())
 	}
 	defer connection.Close()
 
-	// open a channel
-	log.Printf("got Connection, getting Channel")
+	// open a channel on our server
+	logging.INFO.Printf("Producer %d got Connection, getting Channel", i+1)
+	// log.Printf("got Connection, getting Channel")
 	channel, err := connection.Channel()
 	if err != nil {
-		log.Fatalf("Channel: %s", err)
+		logging.FATAL.Printf("Channel: %s", err.Error())
+		// log.Fatalf("Channel: %s", err)
 	}
 
-	if config.WaitForAck {
-		channel.Confirm(false)
+	// log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
+	logging.INFO.Printf("Producer %d got Channel, declaring Exchange", i+1)
+	if err := channel.ExchangeDeclare(
+		"stress-test-exchange", // name
+		"direct",               // type - direct|fanout|topic|x-custom"
+		false,                  // durable
+		false,                  // auto-deleted
+		false,                  // internal
+		false,                  // noWait
+		nil,                    // arguments
+	); err != nil {
+		logging.FATAL.Printf("Exchange Declare: %s", err)
+		// fmt.Errorf("Exchange Declare: %s", err)
 	}
+
+	// Reliable publisher confirms require confirm.select support from the
+	// connection.
+	if config.Reliable {
+		// log.Printf("enabling publishing confirms.")
+		logging.INFO.Printf("Producer %d enabling publishing confirms.", i+1)
+		if err := channel.Confirm(false); err != nil {
+			logging.ERROR.Printf("Producer %d Channel could not be put into confirm mode: %s", i+1, err)
+			// fmt.Errorf("Channel could not be put into confirm mode: %s", err)
+		}
+
+		// confirms := channel.NotifyPublish(make(chan amqp.Confirmation, 1))
+		//
+		// defer confirmOne(confirms)
+	}
+
+	// -
+
+	// if config.Reliable {
+	// 	channel.Confirm(false)
+	// }
 
 	ack, nack := channel.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
@@ -56,6 +95,7 @@ func Produce(config MyConfig, tasks chan int) {
 	for {
 
 		sequenceNumber, alive := <-tasks
+		log.Printf("Sequence: %d, alive: %v", sequenceNumber, alive)
 
 		if !alive {
 			channel.Close()
@@ -64,22 +104,37 @@ func Produce(config MyConfig, tasks chan int) {
 			return
 		}
 
-		start := time.Now()
+		// Make the payload
+		bigString, err := makeString(config.Bytes)
+		if err != nil {
+			logging.ERROR.Printf(err.Error())
+		}
 
-		message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: makeString(config.Bytes)}
+		start := time.Now()
+		message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: bigString}
 		messageJSON, _ := json.Marshal(message)
 
-		channel.Publish("", q.Name, true, false, amqp.Publishing{
-			Headers:         amqp.Table{},
-			ContentType:     "text/plain",
-			ContentEncoding: "UTF-8",
-			Body:            messageJSON,
-			DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
-			Priority:        0,              // 0-9
-		},
-		)
+		if err = channel.Publish(
+			"",     // publish to an exchange
+			q.Name, // routing to 0 or more queues
+			false,  // mandatory
+			false,  // immediate
+			amqp.Publishing{
+				Headers:         amqp.Table{},
+				ContentType:     "text/plain",
+				ContentEncoding: "UTF-8",
+				Body:            messageJSON,
+				DeliveryMode:    amqp.Transient, // 1=non-persistent, 2=persistent
+				Priority:        0,              // 0-9
+			},
+		); err != nil {
+			logging.ERROR.Printf("Producer %d exchange publish err: %s", i+1, err)
+			// fmt.Errorf("Exchange Publish: %s", err)
+		}
 
-		confirmOne(ack, nack, config.Quiet, config.WaitForAck)
+		confirmOne(ack, nack, config.Quiet, config.Reliable)
+
+		logging.INFO.Printf("I am producer %d and I sent message %d", i+1, sequenceNumber)
 
 		if !config.Quiet {
 			log.Println(time.Since(start))
@@ -104,7 +159,16 @@ func confirmOne(ack, nack chan uint64, quiet bool, waitForAck bool) {
 	}
 }
 
-func makeString(bytes int) string {
+// makeString will create a string of a length you specify.  You pass it
+// a number of bytes and it will return a string of that length. TODO:
+// This should really be rewritten to just generate random characters.
+func makeString(bytes int) (string, error) {
+	if bytes > 30000 {
+		// errors.New constructs a basic error value
+		// with the given error message.
+		return "", errors.New("Too many bytes!")
+	}
+
 	longString := `
   ANTAŬPAROLO.
 
@@ -716,6 +780,6 @@ de Komenský. Sed la kulturo ne estu privilegio de iu klaso. Komenský
 deziris disvastigi ĝin el ĝia eŭropa lulilo en la plej malproksimajn
 landojn de la tero, por ke iam ĉiuj eksentu ĝian benon.`
 
-	return longString[0:bytes]
+	return longString[0:bytes], nil
 
 }

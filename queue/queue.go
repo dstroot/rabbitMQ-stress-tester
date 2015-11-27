@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-const queueName string = "stress-test-exchange"
+const queueName string = "stress-test-exchange-key"
 
 // MqMessage is a struct that contains messages.  Messages are defined
 // by a time stamp, a sequence number and the message payload.
@@ -18,7 +18,7 @@ type MqMessage struct {
 }
 
 // MakeQueue ...
-func MakeQueue(c *amqp.Channel) amqp.Queue {
+func MakeQueue(ch *amqp.Channel) amqp.Queue {
 
 	// Queues in the AMQP model are very similar to queues in other message
 	// and task-queueing systems: they store messages that are consumed by
@@ -40,7 +40,7 @@ func MakeQueue(c *amqp.Channel) amqp.Queue {
 	// Queues with this lifetime can also be deleted normally with QueueDelete.
 	// These durable queues can only be bound to non-durable exchanges.
 	//
-	// Non-Durable and Non-Auto-Deleted queues will remain declared as long
+	// *Non-Durable and Non-Auto-Deleted queues will remain declared as long
 	// as the server is running regardless of how many consumers. This lifetime
 	// is useful for temporary topologies that may have long delays between
 	// consumer activity. These queues can only be bound to non-durable exchanges.
@@ -61,17 +61,14 @@ func MakeQueue(c *amqp.Channel) amqp.Queue {
 	//
 	// When the error return value is not nil, you can assume the queue
 	// could not be declared with these parameters and the channel will be closed.
-
-	/**
-	 * [QueueDeclare description]
-	 * @param name         string [name of the queue]
-	 * @param durable      bool   [durable flag]
-	 * @param autoDelete   bool   [auto delete flag]
-	 * @param exclusive    bool   [exclusive flag]
-	 * @param noWait       bool   [no wait flag]
-	 * @param args         Table  [additional arguments]
-	 */
-	q, err := c.QueueDeclare(queueName, true, false, false, false, nil)
+	q, err := ch.QueueDeclare(
+		queueName, // name
+		false,     // durable flg
+		false,     // auto delete flag
+		false,     // exclusive flag
+		false,     // no wait flag
+		nil,       // additional arguments
+	)
 	if err != nil {
 		// Fatalf is equivalent to Printf() followed by a call to os.Exit(1).
 		log.Fatalf("Error: %s", err)

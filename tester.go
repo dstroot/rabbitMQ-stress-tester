@@ -62,6 +62,7 @@ package main
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/backstop/rabbit-mq-stress-tester/consumer"
@@ -148,7 +149,7 @@ func main() {
 func runApp(c *cli.Context) {
 
 	// setup logging
-	logging.SetLogFile("./tester.txt")
+	// logging.SetLogFile("./tester.txt")
 	if c.Bool("verbose") {
 		logging.SetLogThreshold(logging.LevelTrace)
 		logging.SetStdoutThreshold(logging.LevelInfo)
@@ -177,7 +178,7 @@ func runApp(c *cli.Context) {
 		logging.WARN.Println("Bytes per message: ", c.Int("bytes"))
 		logging.WARN.Println("Wait between messages: ", c.Int("wait"))
 
-		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), WaitForAck: c.Bool("reliable")}
+		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), Reliable: c.Bool("reliable")}
 		makeProducers(c.Int("messages"), c.Int("wait"), c.Int("producers"), config)
 
 	} else {
@@ -193,11 +194,17 @@ func runApp(c *cli.Context) {
 func makeProducers(messages int, wait int, producers int, config producer.MyConfig) {
 
 	taskChan := make(chan int)
+	var wg sync.WaitGroup // number of Goroutines
 
 	// create producers
 	for i := 0; i < producers; i++ {
-		logging.INFO.Printf("Making producer %d", i+1)
-		go producer.Produce(config, taskChan)
+		wg.Add(1)
+		// producer
+		go func(c producer.MyConfig, ch chan int, i int) {
+			defer wg.Done()
+			logging.INFO.Printf("Making producer %d", i+1)
+			go producer.Produce(config, taskChan, i)
+		}(config, taskChan, i)
 	}
 
 	start := time.Now()
@@ -209,13 +216,22 @@ func makeProducers(messages int, wait int, producers int, config producer.MyConf
 		time.Sleep(time.Duration(int64(wait)))
 	}
 
-	// wait and close (elegant???)
-	time.Sleep(time.Duration(100000))
-	close(taskChan)
+	// closer
+	go func() {
+		wg.Wait()
+		close(taskChan)
+		logging.WARN.Printf("Producing finished: %s", time.Since(start))
+	}()
 
-	logging.WARN.Printf("Producing finished: %s", time.Since(start))
+	// // wait and close (elegant???)
+	// time.Sleep(time.Duration(100000))
+	// close(taskChan)
+
+	// logging.WARN.Printf("Producing finished: %s", time.Since(start))
 }
 
+// makeConsumers creates a variable number of "consumer" goroutines and
+// receives a variable number of messages.
 func makeConsumers(uri string, consumers int, messages int) {
 
 	doneChan := make(chan bool)

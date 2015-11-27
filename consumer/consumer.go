@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/backstop/rabbit-mq-stress-tester/logging"
 	"github.com/dstroot/rabbit-mq-stress-tester/queue"
 	"github.com/streadway/amqp"
 )
@@ -43,7 +44,7 @@ func Consume(uri string, doneChan chan bool) {
 		if err3 != nil {
 			log.Printf("Error unmarshalling! %s", err3)
 		}
-		log.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
+		logging.INFO.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
 	}
 
 	log.Println("done recieving")
