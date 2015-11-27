@@ -77,7 +77,6 @@ var totalCount int64
 // main parses all the command flags and the calls the function "runApp" to
 // actually run the application
 func main() {
-	// runtime.GOMAXPROCS(runtime.NumCPU())
 	app := cli.NewApp()
 	app.Name = "Coyote"
 	app.HelpName = "coyote"
@@ -113,19 +112,8 @@ func main() {
 		cli.IntFlag{
 			Name:   "bytes, b",
 			Value:  1000,
-			Usage:  "number of extra bytes to add to the RabbitMQ message payload. ~50K max",
+			Usage:  "number of bytes to deliver in the RabbitMQ message payload (~50K max)",
 			EnvVar: "RABBITMQ_BYTES",
-		},
-		cli.IntFlag{
-			Name:   "wait, w",
-			Value:  0,
-			Usage:  "number of nanoseconds to wait between publish events",
-			EnvVar: "RABBITMQ_WAIT",
-		},
-		cli.BoolFlag{
-			Name:   "quiet, q",
-			Usage:  "print only errors to stdout",
-			EnvVar: "RABBITMQ_QUIET",
 		},
 		cli.BoolFlag{
 			Name:   "reliable, r",
@@ -153,6 +141,8 @@ func runApp(c *cli.Context) {
 	if c.Bool("verbose") {
 		logging.SetLogThreshold(logging.LevelTrace)
 		logging.SetStdoutThreshold(logging.LevelInfo)
+	} else {
+		logging.SetStdoutThreshold(logging.LevelWarn)
 	}
 
 	uri := "amqp://guest:guest@" + c.String("server")
@@ -176,10 +166,10 @@ func runApp(c *cli.Context) {
 		logging.WARN.Println("Producers to create: ", c.Int("producers"))
 		logging.WARN.Println("Messages to send: ", c.Int("messages"))
 		logging.WARN.Println("Bytes per message: ", c.Int("bytes"))
-		logging.WARN.Println("Wait between messages: ", c.Int("wait"))
+		// logging.WARN.Println("Wait between messages: ", c.Int("wait"))
 
 		config := producer.MyConfig{URI: uri, Bytes: c.Int("bytes"), Quiet: c.Bool("quiet"), Reliable: c.Bool("reliable")}
-		makeProducers(c.Int("messages"), c.Int("wait"), c.Int("producers"), config)
+		makeProducers(c.Int("messages"), c.Int("producers"), config)
 
 	} else {
 		logging.ERROR.Println("Something was specified incorrectly.")
@@ -190,44 +180,39 @@ func runApp(c *cli.Context) {
 }
 
 // makeProducers creates a variable number of "producer" goroutines and
-// sends a variable number of messages to the taskChan channel
-func makeProducers(messages int, wait int, producers int, config producer.MyConfig) {
+// sends a variable number of messages to the taskChan channel to make the
+// producers create that number of messages.
+func makeProducers(messages int, producers int, config producer.MyConfig) {
 
-	taskChan := make(chan int)
-	var wg sync.WaitGroup // number of Goroutines
+	start := time.Now()
+	taskChan := make(chan int, messages) // buffered channel, # of messages
+	var wg sync.WaitGroup                // track number of Goroutines
 
-	// create producers
+	// fill tasks channel
+	go func() {
+		for i := 0; i < messages; i++ {
+			logging.INFO.Printf("Making message %d", i+1)
+			taskChan <- i
+		}
+		// closing the channel allows our producer goroutines to know
+		// when they are done.
+		close(taskChan)
+	}()
+
+	// create producers to create messages from the task channel
 	for i := 0; i < producers; i++ {
 		wg.Add(1)
-		// producer
-		go func(c producer.MyConfig, ch chan int, i int) {
-			defer wg.Done()
-			logging.INFO.Printf("Making producer %d", i+1)
-			go producer.Produce(config, taskChan, i)
+		// make a producer
+		go func(c producer.MyConfig, tch chan int, i int) {
+			defer wg.Done() // Decrement the counter when the goroutine completes.
+			logging.WARN.Printf("Making producer %d", i+1)
+			producer.Produce(c, tch, i)
 		}(config, taskChan, i)
 	}
 
-	start := time.Now()
-
-	// create Messages
-	for i := 0; i < messages; i++ {
-		logging.INFO.Printf("Making message %d", i+1)
-		taskChan <- i // send i to taskChan
-		time.Sleep(time.Duration(int64(wait)))
-	}
-
-	// closer
-	go func() {
-		wg.Wait()
-		close(taskChan)
-		logging.WARN.Printf("Producing finished: %s", time.Since(start))
-	}()
-
-	// // wait and close (elegant???)
-	// time.Sleep(time.Duration(100000))
-	// close(taskChan)
-
-	// logging.WARN.Printf("Producing finished: %s", time.Since(start))
+	// wait for producers to finish
+	wg.Wait()
+	logging.WARN.Printf("Producing finished: %s", time.Since(start))
 }
 
 // makeConsumers creates a variable number of "consumer" goroutines and
@@ -238,7 +223,7 @@ func makeConsumers(uri string, consumers int, messages int) {
 
 	// create consumers
 	for i := 0; i < consumers; i++ {
-		logging.INFO.Printf("Making consumer %d", i+1)
+		logging.WARN.Printf("Making consumer %d", i+1)
 		go consumer.Consume(uri, doneChan)
 	}
 

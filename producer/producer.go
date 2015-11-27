@@ -3,7 +3,6 @@ package producer
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/backstop/rabbit-mq-stress-tester/logging"
@@ -13,23 +12,15 @@ import (
 
 // MyConfig ...
 type MyConfig struct {
-	URI      string
-	Bytes    int
-	Quiet    bool
-	Reliable bool
+	URI      string // RabbitMQ connection string
+	Bytes    int    // number of bytes for the message payload
+	Quiet    bool   // should remove - use -V verbose insteadd
+	Reliable bool   // reliable", true, "Wait for the publisher confirmation before exiting"
 }
 
-// // Example complete producer configuration
-// var configExample struct {
-// 	uri          string // uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-// 	exchangeName string // exchange", "test-exchange", "Durable AMQP exchange name")
-// 	exchangeType string // exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
-// 	routingKey   string // key", "test-key", "AMQP routing key")
-// 	body         string // body", "foobar", "Body of message")
-// 	reliable     bool   // reliable", true, "Wait for the publisher confirmation before exiting")
-// }
-
-// Produce ...
+// Produce creates a publisher connection to RabbitMQ and listens on the
+// tasks channel for work to do - for each item it receives on the tasks
+// channel it will publish a message.
 func Produce(config MyConfig, tasks chan int, i int) {
 
 	logging.INFO.Printf("I am producer %d", i+1)
@@ -39,17 +30,14 @@ func Produce(config MyConfig, tasks chan int, i int) {
 	connection, err := amqp.Dial(config.URI)
 	if err != nil {
 		logging.FATAL.Printf("Dial: %s", err.Error())
-		// log.Fatalf("Dial: %s", err.Error())
 	}
 	defer connection.Close()
 
 	// open a channel on our server
 	logging.INFO.Printf("Producer %d got Connection, getting Channel", i+1)
-	// log.Printf("got Connection, getting Channel")
 	channel, err := connection.Channel()
 	if err != nil {
 		logging.FATAL.Printf("Channel: %s", err.Error())
-		// log.Fatalf("Channel: %s", err)
 	}
 
 	// log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
@@ -70,11 +58,9 @@ func Produce(config MyConfig, tasks chan int, i int) {
 	// Reliable publisher confirms require confirm.select support from the
 	// connection.
 	if config.Reliable {
-		// log.Printf("enabling publishing confirms.")
 		logging.INFO.Printf("Producer %d enabling publishing confirms.", i+1)
 		if err := channel.Confirm(false); err != nil {
 			logging.ERROR.Printf("Producer %d Channel could not be put into confirm mode: %s", i+1, err)
-			// fmt.Errorf("Channel could not be put into confirm mode: %s", err)
 		}
 
 		// confirms := channel.NotifyPublish(make(chan amqp.Confirmation, 1))
@@ -82,38 +68,39 @@ func Produce(config MyConfig, tasks chan int, i int) {
 		// defer confirmOne(confirms)
 	}
 
-	// -
-
-	// if config.Reliable {
-	// 	channel.Confirm(false)
-	// }
-
 	ack, nack := channel.NotifyConfirm(make(chan uint64, 1), make(chan uint64, 1))
 
 	q := queue.MakeQueue(channel)
 
-	for {
+	// TODO right now I am stuck - this loop drains the task channel BUT it
+	// never knows it's completed the required number of tasks.  When the
+	// tasks channel is empty this just blocks indefinitely...
+	for task := range tasks {
 
-		sequenceNumber, alive := <-tasks
-		log.Printf("Sequence: %d, alive: %v", sequenceNumber, alive)
+		// for {
+		// read from tasks channel
+		// sequenceNumber, alive := <-tasks
+		logging.INFO.Printf("Producer: %d, Sequence: %d", i+1, task+1)
+		// logging.INFO.Printf("Producer: %d, Sequence: %d, alive: %v", i+1, sequenceNumber+1, alive)
 
-		if !alive {
-			channel.Close()
-			connection.Close()
-			log.Println("Broke out of loop!")
-			return
-		}
+		// if !alive {
+		// 	channel.Close()
+		// 	connection.Close()
+		// 	log.Println("Broke out of loop!")
+		// 	return
+		// }
 
 		// Make the payload
 		bigString, err := makeString(config.Bytes)
 		if err != nil {
 			logging.ERROR.Printf(err.Error())
 		}
-
 		start := time.Now()
-		message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: bigString}
+		message := &queue.MqMessage{TimeNow: start, SequenceNumber: task, Payload: bigString}
+		// message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: bigString}
 		messageJSON, _ := json.Marshal(message)
 
+		// publish the message
 		if err = channel.Publish(
 			"",     // publish to an exchange
 			q.Name, // routing to 0 or more queues
@@ -129,32 +116,26 @@ func Produce(config MyConfig, tasks chan int, i int) {
 			},
 		); err != nil {
 			logging.ERROR.Printf("Producer %d exchange publish err: %s", i+1, err)
-			// fmt.Errorf("Exchange Publish: %s", err)
 		}
 
-		confirmOne(ack, nack, config.Quiet, config.Reliable)
+		confirmOne(ack, nack, config.Reliable)
 
-		logging.INFO.Printf("I am producer %d and I sent message %d", i+1, sequenceNumber)
-
-		if !config.Quiet {
-			log.Println(time.Since(start))
-		}
+		logging.INFO.Printf("I am producer %d and I sent message %d, time since start %v", i+1, task+1, time.Since(start))
 	}
 
 }
 
-func confirmOne(ack, nack chan uint64, quiet bool, waitForAck bool) {
+func confirmOne(ack, nack chan uint64, waitForAck bool) {
 	if waitForAck {
 		select {
 		case tag := <-ack:
-			if !quiet {
-				// Printing via package log is safe from concurrent
-				// goroutines (which plain fmt isn't). Log can also add
-				// timing information automatically.
-				log.Printf("Acked %d", tag)
-			}
+			// Printing via package log is safe from concurrent
+			// goroutines (which plain fmt isn't). Log can also add
+			// timing information automatically.
+			// log.Printf("Acked %d", tag)
+			logging.INFO.Printf("Acked %d", tag)
 		case tag := <-nack:
-			log.Printf("Nack alert! %d", tag)
+			logging.ERROR.Printf("Nack alert! %d", tag)
 		}
 	}
 }
