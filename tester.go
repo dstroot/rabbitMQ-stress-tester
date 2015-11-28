@@ -94,30 +94,30 @@ func main() {
 		cli.IntFlag{
 			Name:   "consumers, c",
 			Value:  0,
-			Usage:  "number of consumers to create. each is a seperate goroutine",
+			Usage:  "number of consumers to create, each is a seperate goroutine",
 			EnvVar: "RABBITMQ_CONSUMER",
 		},
 		cli.IntFlag{
 			Name:   "producers, p",
 			Value:  0,
-			Usage:  "number of producers to create. each is a seperate goroutine",
+			Usage:  "number of producers to create, each is a seperate goroutine",
 			EnvVar: "RABBITMQ_PRODUCER",
 		},
 		cli.IntFlag{
 			Name:   "messages, m",
 			Value:  10,
-			Usage:  "number of messages to process. -1 is infinite",
+			Usage:  "number of messages to process.",
 			EnvVar: "RABBITMQ_MESSAGES",
 		},
 		cli.IntFlag{
 			Name:   "bytes, b",
 			Value:  1000,
-			Usage:  "number of bytes to deliver in the RabbitMQ message payload (~50K max)",
+			Usage:  "number of bytes to deliver in the message payload (~36K bytes max)",
 			EnvVar: "RABBITMQ_BYTES",
 		},
 		cli.BoolFlag{
 			Name:   "reliable, r",
-			Usage:  "wait for an ack or nack after enqueueing a message",
+			Usage:  "wait for an ack or nack after queueing a message",
 			EnvVar: "RABBITMQ_RELIABLE",
 		},
 		cli.BoolFlag{
@@ -191,7 +191,6 @@ func makeProducers(messages int, producers int, config producer.MyConfig) {
 	// fill tasks channel
 	go func() {
 		for i := 0; i < messages; i++ {
-			logging.INFO.Printf("Making message %d", i+1)
 			taskChan <- i
 		}
 		// closing the channel allows our producer goroutines to know
@@ -199,7 +198,7 @@ func makeProducers(messages int, producers int, config producer.MyConfig) {
 		close(taskChan)
 	}()
 
-	// create producers to create messages from the task channel
+	// create producers to create messages (using the task channel)
 	for i := 0; i < producers; i++ {
 		wg.Add(1)
 		// make a producer

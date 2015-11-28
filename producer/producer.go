@@ -10,7 +10,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// MyConfig ...
+// MyConfig contains the configuration data
 type MyConfig struct {
 	URI      string // RabbitMQ connection string
 	Bytes    int    // number of bytes for the message payload
@@ -40,20 +40,20 @@ func Produce(config MyConfig, tasks chan int, i int) {
 		logging.FATAL.Printf("Channel: %s", err.Error())
 	}
 
-	// log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
-	logging.INFO.Printf("Producer %d got Channel, declaring Exchange", i+1)
-	if err := channel.ExchangeDeclare(
-		"stress-test-exchange", // name
-		"direct",               // type - direct|fanout|topic|x-custom"
-		false,                  // durable
-		false,                  // auto-deleted
-		false,                  // internal
-		false,                  // noWait
-		nil,                    // arguments
-	); err != nil {
-		logging.FATAL.Printf("Exchange Declare: %s", err)
-		// fmt.Errorf("Exchange Declare: %s", err)
-	}
+	// // log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
+	// logging.INFO.Printf("Producer %d got Channel, declaring Exchange", i+1)
+	// if err := channel.ExchangeDeclare(
+	// 	"stress-test-exchange", // name
+	// 	"direct",               // type - direct|fanout|topic|x-custom"
+	// 	false,                  // durable
+	// 	false,                  // auto-deleted
+	// 	false,                  // internal
+	// 	false,                  // noWait
+	// 	nil,                    // arguments
+	// ); err != nil {
+	// 	logging.FATAL.Printf("Exchange Declare: %s", err)
+	// 	// fmt.Errorf("Exchange Declare: %s", err)
+	// }
 
 	// Reliable publisher confirms require confirm.select support from the
 	// connection.
@@ -72,32 +72,16 @@ func Produce(config MyConfig, tasks chan int, i int) {
 
 	q := queue.MakeQueue(channel)
 
-	// TODO right now I am stuck - this loop drains the task channel BUT it
-	// never knows it's completed the required number of tasks.  When the
-	// tasks channel is empty this just blocks indefinitely...
 	for task := range tasks {
-
-		// for {
-		// read from tasks channel
-		// sequenceNumber, alive := <-tasks
-		logging.INFO.Printf("Producer: %d, Sequence: %d", i+1, task+1)
-		// logging.INFO.Printf("Producer: %d, Sequence: %d, alive: %v", i+1, sequenceNumber+1, alive)
-
-		// if !alive {
-		// 	channel.Close()
-		// 	connection.Close()
-		// 	log.Println("Broke out of loop!")
-		// 	return
-		// }
+		start := time.Now()
 
 		// Make the payload
 		bigString, err := makeString(config.Bytes)
 		if err != nil {
 			logging.ERROR.Printf(err.Error())
 		}
-		start := time.Now()
+
 		message := &queue.MqMessage{TimeNow: start, SequenceNumber: task, Payload: bigString}
-		// message := &queue.MqMessage{TimeNow: start, SequenceNumber: sequenceNumber, Payload: bigString}
 		messageJSON, _ := json.Marshal(message)
 
 		// publish the message
@@ -119,7 +103,6 @@ func Produce(config MyConfig, tasks chan int, i int) {
 		}
 
 		confirmOne(ack, nack, config.Reliable)
-
 		logging.INFO.Printf("I am producer %d and I sent message %d, time since start %v", i+1, task+1, time.Since(start))
 	}
 
@@ -143,8 +126,9 @@ func confirmOne(ack, nack chan uint64, waitForAck bool) {
 // makeString will create a string of a length you specify.  You pass it
 // a number of bytes and it will return a string of that length. TODO:
 // This should really be rewritten to just generate random characters.
+// Ugly stuff...
 func makeString(bytes int) (string, error) {
-	if bytes > 30000 {
+	if bytes > 36000 {
 		// errors.New constructs a basic error value
 		// with the given error message.
 		return "", errors.New("Too many bytes!")

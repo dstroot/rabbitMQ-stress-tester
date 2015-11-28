@@ -7,7 +7,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-const queueName string = "stress-test-exchange-key"
+const queueName string = "stress-test-exchange"
 
 // MqMessage is a struct that contains messages.  Messages are defined
 // by a time stamp, a sequence number and the message payload.
