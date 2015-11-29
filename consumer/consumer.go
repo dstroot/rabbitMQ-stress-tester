@@ -11,20 +11,24 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// Consume cosumes messages
-func Consume(uri string, doneChan chan bool) {
+// Consume consumes messages
+func Consume(uri string, doneChan chan bool, i int) {
 
-	// create connection
+	logging.INFO.Printf("I am consumer %d", i+1)
+
+	// get a connection to our server
+	logging.INFO.Printf("Consumer %d dialing %q", i+1, uri)
 	connection, err := amqp.Dial(uri)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
+		logging.FATAL.Printf("Dial: %s", err.Error())
 	}
 	defer connection.Close()
 
-	// create channel
-	channel, err1 := connection.Channel()
-	if err1 != nil {
-		log.Fatalf("Error: %s", err1)
+	// open a channel on our server
+	logging.INFO.Printf("Consumer %d got Connection, getting Channel", i+1)
+	channel, err := connection.Channel()
+	if err != nil {
+		logging.FATAL.Printf("Channel: %s", err.Error())
 	}
 	defer channel.Close()
 
@@ -47,5 +51,4 @@ func Consume(uri string, doneChan chan bool) {
 		logging.INFO.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
 	}
 
-	log.Println("done recieving")
 }

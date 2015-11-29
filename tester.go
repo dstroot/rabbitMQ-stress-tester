@@ -223,7 +223,7 @@ func makeConsumers(uri string, consumers int, messages int) {
 	// create consumers
 	for i := 0; i < consumers; i++ {
 		logging.WARN.Printf("Making consumer %d", i+1)
-		go consumer.Consume(uri, doneChan)
+		go consumer.Consume(uri, doneChan, i)
 	}
 
 	start := time.Now()

@@ -125,13 +125,17 @@ func confirmOne(ack, nack chan uint64, waitForAck bool) {
 
 // makeString will create a string of a length you specify.  You pass it
 // a number of bytes and it will return a string of that length. TODO:
-// This should really be rewritten to just generate random characters.
-// Ugly stuff...
+// This should really be rewritten to just generate random characters and
+// use a uint for the number of bytes. Ugly stuff...
 func makeString(bytes int) (string, error) {
-	if bytes > 36000 {
+	if bytes < 1 {
 		// errors.New constructs a basic error value
 		// with the given error message.
-		return "", errors.New("Too many bytes!")
+		return "", errors.New("not enough bytes")
+	} else if bytes > 36000 {
+		// errors.New constructs a basic error value
+		// with the given error message.
+		return "", errors.New("too many bytes")
 	}
 
 	longString := `
