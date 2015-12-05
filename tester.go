@@ -65,10 +65,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/backstop/rabbit-mq-stress-tester/consumer"
-	"github.com/backstop/rabbit-mq-stress-tester/logging"
-	"github.com/backstop/rabbit-mq-stress-tester/producer"
 	"github.com/codegangsta/cli"
+	"github.com/dstroot/rabbit-mq-stress-tester/consumer"
+	"github.com/dstroot/rabbit-mq-stress-tester/logging"
+	"github.com/dstroot/rabbit-mq-stress-tester/producer"
 )
 
 var totalTime int64

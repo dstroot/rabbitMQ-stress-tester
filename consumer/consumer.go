@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/backstop/rabbit-mq-stress-tester/logging"
+	"github.com/dstroot/rabbit-mq-stress-tester/logging"
 	"github.com/dstroot/rabbit-mq-stress-tester/queue"
 	"github.com/streadway/amqp"
 )
