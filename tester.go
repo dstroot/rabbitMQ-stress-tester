@@ -210,14 +210,14 @@ func makeProducers(messages int, producers int, config producer.MyConfig) {
 				}
 			}()
 			defer wg.Done() // Decrement producer counter when the goroutine completes.
-			logging.WARN.Printf("Making producer %d", i+1)
+			logging.INFO.Printf("Making producer %d", i+1)
 			producer.Produce(c, tch, i)
 		}(config, taskChan, i)
 	}
 
 	// wait for producers to finish
 	wg.Wait()
-	logging.WARN.Printf("Producing finished: %s", time.Since(start))
+	logging.WARN.Printf("Done producing: %s", time.Since(start))
 }
 
 // makeConsumers creates a variable number of "consumer" goroutines and
@@ -228,7 +228,7 @@ func makeConsumers(uri string, consumers int, messages int) {
 
 	// create consumers
 	for i := 0; i < consumers; i++ {
-		logging.WARN.Printf("Making consumer %d", i+1)
+		logging.INFO.Printf("Making consumer %d", i+1)
 		go consumer.Consume(uri, doneChan, i)
 	}
 
@@ -249,5 +249,5 @@ func makeConsumers(uri string, consumers int, messages int) {
 		}
 	}
 
-	logging.WARN.Printf("Done consuming! %s", time.Since(start))
+	logging.WARN.Printf("Done consuming: %s", time.Since(start))
 }
