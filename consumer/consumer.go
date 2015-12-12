@@ -36,17 +36,17 @@ func Consume(uri string, doneChan chan bool, i int) {
 	q := queue.MakeQueue(channel)
 
 	// consume messages
-	msgs, err2 := channel.Consume(q.Name, "", true, false, false, false, nil)
-	if err2 != nil {
-		log.Fatalf("Error: %s", err2)
+	msgs, err := channel.Consume(q.Name, "", true, false, false, false, nil)
+	if err != nil {
+		log.Fatalf("Error: %s", err)
 	}
 
 	for d := range msgs {
 		doneChan <- true
 		var thisMessage queue.MqMessage
-		err3 := json.Unmarshal(d.Body, &thisMessage)
-		if err3 != nil {
-			log.Printf("Error unmarshalling! %s", err3)
+		err := json.Unmarshal(d.Body, &thisMessage)
+		if err != nil {
+			log.Printf("Error unmarshalling! %s", err)
 		}
 		logging.INFO.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
 	}

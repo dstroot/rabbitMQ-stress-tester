@@ -200,10 +200,16 @@ func makeProducers(messages int, producers int, config producer.MyConfig) {
 
 	// create producers to create messages (using the task channel)
 	for i := 0; i < producers; i++ {
-		wg.Add(1)
+		wg.Add(1) // track how many producers we made
 		// make a producer
 		go func(c producer.MyConfig, tch chan int, i int) {
-			defer wg.Done() // Decrement the counter when the goroutine completes.
+			defer func() {
+				if r := recover(); r != nil {
+					// handle producer connect timeout gracefully
+					os.Exit(0)
+				}
+			}()
+			defer wg.Done() // Decrement producer counter when the goroutine completes.
 			logging.WARN.Printf("Making producer %d", i+1)
 			producer.Produce(c, tch, i)
 		}(config, taskChan, i)
@@ -226,7 +232,7 @@ func makeConsumers(uri string, consumers int, messages int) {
 		go consumer.Consume(uri, doneChan, i)
 	}
 
-	start := time.Now()
+	var start time.Time
 
 	// get messages
 	if messages > 0 {

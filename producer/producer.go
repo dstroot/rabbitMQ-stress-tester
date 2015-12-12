@@ -30,6 +30,7 @@ func Produce(config MyConfig, tasks chan int, i int) {
 	connection, err := amqp.Dial(config.URI)
 	if err != nil {
 		logging.FATAL.Printf("Dial: %s", err.Error())
+		panic(err) // do not continue
 	}
 	defer connection.Close()
 
