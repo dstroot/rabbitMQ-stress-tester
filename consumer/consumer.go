@@ -21,6 +21,7 @@ func Consume(uri string, doneChan chan bool, i int) {
 	connection, err := amqp.Dial(uri)
 	if err != nil {
 		logging.FATAL.Printf("Dial: %s", err.Error())
+		panic(err) // do not continue
 	}
 	defer connection.Close()
 
@@ -29,6 +30,7 @@ func Consume(uri string, doneChan chan bool, i int) {
 	channel, err := connection.Channel()
 	if err != nil {
 		logging.FATAL.Printf("Channel: %s", err.Error())
+		panic(err) // do not continue
 	}
 	defer channel.Close()
 
@@ -48,7 +50,7 @@ func Consume(uri string, doneChan chan bool, i int) {
 		if err != nil {
 			log.Printf("Error unmarshalling! %s", err)
 		}
-		logging.INFO.Printf("Message age: %s", time.Since(thisMessage.TimeNow))
+		logging.INFO.Printf("Consumer %d, Message age: %s", i+1, time.Since(thisMessage.TimeNow))
 	}
 
 }

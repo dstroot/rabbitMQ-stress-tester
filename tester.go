@@ -224,23 +224,28 @@ func makeProducers(messages int, producers int, config producer.MyConfig) {
 // receives a variable number of messages.
 func makeConsumers(uri string, consumers int, messages int) {
 
+	start := time.Now()
 	doneChan := make(chan bool)
 
-	// create consumers
+	// create consumers to consume messages
 	for i := 0; i < consumers; i++ {
-		logging.INFO.Printf("Making consumer %d", i+1)
-		go consumer.Consume(uri, doneChan, i)
+		// make a consumer
+		go func(u string, dch chan bool, i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					// handle consumer connect timeout gracefully
+					os.Exit(0)
+				}
+			}()
+			logging.INFO.Printf("Making consumer %d", i+1)
+			consumer.Consume(u, dch, i)
+		}(uri, doneChan, i)
 	}
-
-	var start time.Time
 
 	// get messages
 	if messages > 0 {
 		for i := 0; i < messages; i++ {
 			<-doneChan
-			if i == 1 {
-				start = time.Now()
-			}
 			logging.INFO.Printf("Number of messages consumed %d", i+1)
 		}
 	} else {

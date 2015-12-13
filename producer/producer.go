@@ -39,6 +39,7 @@ func Produce(config MyConfig, tasks chan int, i int) {
 	channel, err := connection.Channel()
 	if err != nil {
 		logging.FATAL.Printf("Channel: %s", err.Error())
+		panic(err) // do not continue
 	}
 
 	// // log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
