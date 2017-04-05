@@ -1,20 +1,3 @@
-# Workpool - Version 1.0.0
-
-Copyright 2013 Ardan Studios. All rights reserved.
-
-Use of this source code is governed by a BSD-style license that can be found in the LICENSE handle.
-
-Ardan Studios<br />
-12973 SW 112 ST, Suite 153<br />
-Miami, FL 33186<br />
-bill@ardanstudios.com<br />
-
-[Click To View Documentation](http://godoc.org/github.com/goinggo/utilities/v1/workpool)
-
-
-
-
-
 rabbit-mq-stress-tester
 =======================
 
@@ -84,5 +67,5 @@ Produce 100,000 messages of 10KB each, using 50 concurrent goroutines, waiting 1
     ./tester -s rabbit-mq-test.cs1cloud.internal -p 100000 -b 10000 -w 100 -n 50 -q
 	
 	
-	
+Also checkout:	
 https://github.com/agocs/rabbit-mq-stress-tester
