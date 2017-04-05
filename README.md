@@ -82,3 +82,7 @@ Consume messages forever:
 Produce 100,000 messages of 10KB each, using 50 concurrent goroutines, waiting 100 nanoseconds between each message. Only print to stdout if there is a nack or when you finish.
 
     ./tester -s rabbit-mq-test.cs1cloud.internal -p 100000 -b 10000 -w 100 -n 50 -q
+	
+	
+	
+https://github.com/agocs/rabbit-mq-stress-tester
